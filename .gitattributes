@@ -1,63 +1,178 @@
-###############################################################################
-# Set default behavior to automatically normalize line endings.
-###############################################################################
-* text=auto
+create  database  [EuroLeagues]
+go
 
-###############################################################################
-# Set default behavior for command prompt diff.
-#
-# This is need for earlier builds of msysgit that does not have it on by
-# default for csharp files.
-# Note: This is only used by command line
-###############################################################################
-#*.cs     diff=csharp
+use [EuroLeagues]
+go
 
-###############################################################################
-# Set the merge driver for project and solution files
-#
-# Merging from the command prompt will add diff markers to the files if there
-# are conflicts (Merging from VS is not affected by the settings below, in VS
-# the diff markers are never inserted). Diff markers may cause the following 
-# file extensions to fail to load in VS. An alternative would be to treat
-# these files as binary and thus will always conflict and require user
-# intervention with every merge. To do so, just uncomment the entries below
-###############################################################################
-#*.sln       merge=binary
-#*.csproj    merge=binary
-#*.vbproj    merge=binary
-#*.vcxproj   merge=binary
-#*.vcproj    merge=binary
-#*.dbproj    merge=binary
-#*.fsproj    merge=binary
-#*.lsproj    merge=binary
-#*.wixproj   merge=binary
-#*.modelproj merge=binary
-#*.sqlproj   merge=binary
-#*.wwaproj   merge=binary
+-- section 1: tables creation (ddl)
 
-###############################################################################
-# behavior for image files
-#
-# image files are treated as binary by default.
-###############################################################################
-#*.jpg   binary
-#*.png   binary
-#*.gif   binary
+create table [Leagues] (
+    [Id] int identity(1,1) primary key,
+    [Name] nvarchar(50) not null
+)
 
-###############################################################################
-# diff behavior for common document formats
-# 
-# Convert binary document formats to text before diffing them. This feature
-# is only available from the command line. Turn it on by uncommenting the 
-# entries below.
-###############################################################################
-#*.doc   diff=astextplain
-#*.DOC   diff=astextplain
-#*.docx  diff=astextplain
-#*.DOCX  diff=astextplain
-#*.dot   diff=astextplain
-#*.DOT   diff=astextplain
-#*.pdf   diff=astextplain
-#*.PDF   diff=astextplain
-#*.rtf   diff=astextplain
-#*.RTF   diff=astextplain
+create table [Teams] (
+    [Id] int identity(1,1) primary key,
+    [Name] nvarchar(50) not null unique,
+    [City] nvarchar(50) not null,
+    [LeagueId] int not null foreign key references [Leagues]([Id])
+)
+
+create table [Players] (
+    [Id] int identity(1,1) primary key,
+    [Name] nvarchar(100) not null,
+    [Position] nvarchar(20) not null
+)
+
+create table [Matches] (
+    [Id] int identity(1,1) primary key,
+    [HomeTeamId] int not null foreign key references [Teams]([Id]),
+    [AwayTeamId] int not null foreign key references [Teams]([Id]),
+    [MatchDate] datetime2 not null,
+    [HomeTeamGoals] int not null default 0,
+    [AwayTeamGoals] int not null default 0,
+    [LeagueId] int not null foreign key references [Leagues]([Id])
+)
+
+create table [PlayersTeams] (
+    [PlayerId] int not null foreign key references [Players]([Id]),
+    [TeamId] int not null foreign key references [Teams]([Id]),
+    constraint [PK_PlayersTeams] primary key ([PlayerId], [TeamId])
+)
+
+create table [PlayerStats] (
+    [PlayerId] int not null primary key foreign key references [Players]([Id]),
+    [Goals] int not null default 0,
+    [Assists] int not null default 0
+)
+
+create table [TeamStats] (
+    [TeamId] int not null primary key foreign key references [Teams]([Id]),
+    [Wins] int not null default 0,
+    [Draws] int not null default 0,
+    [Losses] int not null default 0
+)
+go
+
+-- section 2: data modifications & business logic
+
+-- data logic updates
+update [PlayerStats]
+set [Goals] = [Goals] + 1
+where [PlayerId] in (
+    select [p].[Id]
+    from [Players] as [p]
+    join [PlayersTeams] as [pt] on [p].[Id] = [pt].[PlayerId]
+    join [Teams] as [t] on [pt].[TeamId] = [t].[Id]
+    join [Leagues] as [l] on [t].[LeagueId] = [l].[Id]
+    where [p].[Position] = 'Forward' and [l].[Name] = 'La Liga'
+)
+go
+
+-- data logic deletes
+delete from [PlayerStats]
+where [PlayerId] in (
+    select [p].[Id]
+    from [Players] as [p]
+    join [PlayersTeams] as [pt] on [p].[Id] = [pt].[PlayerId]
+    join [Teams] as [t] on [pt].[TeamId] = [t].[Id]
+    join [Leagues] as [l] on [t].[LeagueId] = [l].[Id]
+    where [l].[Name] = 'Eredivisie' and [p].[Name] in ('Luuk de Jong', 'Josip Sutalo')
+)
+
+delete from [PlayersTeams]
+where [PlayerId] in (
+    select [p].[Id]
+    from [Players] as [p]
+    join [PlayersTeams] as [pt] on [p].[Id] = [pt].[PlayerId]
+    join [Teams] as [t] on [pt].[TeamId] = [t].[Id]
+    join [Leagues] as [l] on [t].[LeagueId] = [l].[Id]
+    where [l].[Name] = 'Eredivisie' and [p].[Name] in ('Luuk de Jong', 'Josip Sutalo')
+)
+
+delete from [Players]
+where [Id] in (
+    select [p].[Id]
+    from [Players] as [p]
+    join [PlayersTeams] as [pt] on [p].[Id] = [pt].[PlayerId]
+    join [Teams] as [t] on [pt].[TeamId] = [t].[Id]
+    join [Leagues] as [l] on [t].[LeagueId] = [l].[Id]
+    where [l].[Name] = 'Eredivisie' and [p].[Name] in ('Luuk de Jong', 'Josip Sutalo')
+)
+go
+
+-- section 3: analytics and reporting queries
+
+-- matches with high goal counts
+select 
+    format([MatchDate], 'yyyy-MM-dd') as [MatchDate],
+    [HomeTeamGoals],
+    [AwayTeamGoals],
+    ([HomeTeamGoals] + [AwayTeamGoals]) as [TotalGoals]
+from [Matches]
+where ([HomeTeamGoals] + [AwayTeamGoals]) >= 5
+order by [TotalGoals] desc, [MatchDate] asc
+go
+
+-- performance metrics for away teams
+select 
+    [t].[Id],
+    [t].[Name],
+    sum([m].[AwayTeamGoals]) as [TotalAwayGoals]
+from [Teams] as [t]
+join [Matches] as [m] on [t].[Id] = [m].[AwayTeamId]
+group by [t].[Id], [t].[Name]
+having sum([m].[AwayTeamGoals]) >= 6
+order by [TotalAwayGoals] desc, [t].[Name] asc
+go
+
+-- league average stats
+select 
+    [l].[Name] as [LeagueName],
+    round(avg(cast([m].[HomeTeamGoals] + [m].[AwayTeamGoals] as float)), 2) as [AvgScoringRate]
+from [Leagues] as [l]
+join [Matches] as [m] on [l].[Id] = [m].[LeagueId]
+group by [l].[Id], [l].[Name]
+order by [AvgScoringRate] desc
+go
+
+-- section 4: programmability
+
+-- function to extract top scorers per league
+create function udf_LeagueTopScorer (@leagueName nvarchar(50))
+returns table
+as
+return (
+    select top (1) with ties
+        [p].[Name] as [PlayerName],
+        [ps].[Goals] as [TotalGoals]
+    FROM [Players] as [p]
+    join [PlayerStats] as [ps] on [p].[Id] = [ps].[PlayerId]
+    join [PlayersTeams] as [pt] on [p].[Id] = [pt].[PlayerId]
+    join [Teams] as [t] on [pt].[TeamId] = [t].[Id]
+    join [Leagues] as [l] on [t].[LeagueId] = [l].[Id]
+    where [l].[Name] = @leagueName
+    order by [ps].[Goals] desc
+)
+go
+
+-- procedure to safely update player stats
+create procedure usp_UpdatePlayerStats
+    @PlayerId int,
+    @GoalsDelta int = null,
+    @AssistsDelta int = null
+as
+begin
+    if not exists (select 1 from [PlayerStats] where [PlayerId] = @PlayerId)
+    begin
+        insert into [PlayerStats] ([PlayerId], [Goals], [Assists])
+        values (@PlayerId, 0, 0)
+    end
+
+    update [PlayerStats]
+    set 
+        [Goals] = [Goals] + coalesce(@GoalsDelta, 0),
+        [Assists] = [Assists] + coalesce(@AssistsDelta, 0)
+    where [PlayerId] = @PlayerId    
+end
+go
