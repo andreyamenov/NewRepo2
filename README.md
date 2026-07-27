@@ -16,4 +16,4 @@ The database consists of 7 main tables connected via foreign key relationships t
 ## How to run
 1. Open Microsoft SQL Server Management Studio (SSMS).
 2. Create a clean database named `EuroLeagues`.
-3. Run the scripts found inside `setup-database.sql`.
+
