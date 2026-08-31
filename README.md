@@ -13,7 +13,4 @@ The database consists of 7 main tables connected via foreign key relationships t
 * Analytical queries featuring string formatting, specific sorting rules, and accurate decimal tracking.
 * Programmability units including an inline Table-Valued Function (TVF) to list top scorers and a flexible updates Stored Procedure.
 
-## How to run
-1. Open Microsoft SQL Server Management Studio (SSMS).
-2. Create a clean database named `EuroLeagues`.
-
+  
